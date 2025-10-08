@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ژنراتور رنگ از شعر | Poetry Color Palette Generator</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700&display=swap');
+        
+        body {
+            font-family: 'Vazirmatn', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+        
+        .gradient-text {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .animate-float {
+            animation: float 3s ease-in-out infinite;
+        }
+        
+        @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
+        }
+        
+        .color-box:hover {
+            transform: scale(1.05) rotate(2deg);
+        }
+        
+        .loading-spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        [dir="rtl"] {
+            text-align: right;
+        }
+
+        [dir="ltr"] {
+            text-align: left;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        // API Base URL
+        const API_BASE = window.location.origin + '/api';
+
+        const App = () => {
+            const [language, setLanguage] = useState('fa');
+            const [poem, setPoem] = useState('');
+            const [poet, setPoet] = useState('');
+            const [loading, setLoading] = useState(false);
+            const [result, setResult] = useState(null);
+            const [poets, setPoets] = useState([]);
+            const [savedPalettes, setSavedPalettes] = useState([]);
+
+            // Load poets on mount
+            useEffect(() => {
+                fetchPoets();
+            }, [language]);
+
+            const fetchPoets = async () => {
+                try {
+                    const response = await fetch(`${API_BASE}/poetry/poets?lang=${language}`);
+                    const data = await response.json();
+                    setPoets(data);
+                } catch (error) {
+                    console.error('Error fetching poets:', error);
+                }
+            };
+
+            const analyzePoetry = async () => {
+                if (!poem.trim()) return;
+
+                setLoading(true);
+                try {
+                    const response = await fetch(`${API_BASE}/poetry/analyze`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            text: poem,
+                            language,
+                            poet: poet || undefined
+                        })
+                    });
+
+                    const data = await response.json();
+                    setResult(data);
+                } catch (error) {
+                    console.error('Error analyzing poetry:', error);
+                    alert('خطا در تحلیل شعر / Error analyzing poetry');
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            const loadSample = (sample, poetName) => {
+                setPoem(sample);
+                setPoet(poetName);
+            };
+
+            const copyColor = (color) => {
+                navigator.clipboard.writeText(color);
+                showToast('رنگ کپی شد / Color copied!');
+            };
+
+            const copyAllColors = () => {
+                if (!result) return;
+                navigator.clipboard.writeText(result.colors.join(', '));
+                showToast('همه رنگ‌ها کپی شد / All colors copied!');
+            };
+
+            const downloadPalette = () => {
+                if (!result) return;
+                
+                const canvas = document.createElement('canvas');
+                canvas.width = 1200;
+                canvas.height = 400;
+                const ctx = canvas.getContext('2d');
+
+                const colorWidth = canvas.width / result.colors.length;
+                result.colors.forEach((color, index) => {
+                    ctx.fillStyle = color;
+                    ctx.fillRect(index * colorWidth, 0, colorWidth, canvas.height);
+                });
+
+                canvas.toBlob((blob) => {
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'poetry-palette.png';
+                    a.click();
+                });
+            };
+
+            const savePalette = () => {
+                if (!result) return;
+                
+                const palette = {
+                    poem: poem.substring(0, 50) + '...',
+                    poet,
+                    colors: result.colors,
+                    gradient: result.gradient,
+                    emotion: result.emotion.name,
+                    timestamp: new Date().toLocaleString(language === 'fa' ? 'fa-IR' : 'en-US')
+                };
+                
+                setSavedPalettes([palette, ...savedPalettes.slice(0, 4)]);
+                showToast('پالت ذخیره شد / Palette saved!');
+            };
+
+            const showToast = (message) => {
+                const toast = document.createElement('div');
+                toast.className = 'fixed top-4 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg z-50';
+                toast.textContent = message;
+                document.body.appendChild(toast);
+                setTimeout(() => toast.remove(), 2000);
+            };
+
+            const toggleLanguage = () => {
+                const newLang = language === 'fa' ? 'en' : 'fa';
+                setLanguage(newLang);
+                document.documentElement.lang = newLang;
+                document.documentElement.dir = newLang === 'fa' ? 'rtl' : 'ltr';
+                setPoem('');
+                setPoet('');
+                setResult(null);
+            };
+
+            const Icons = {
+                Heart: () => (
+                    <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+                    </svg>
+                ),            
+                Moon: () => (
+                    <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+                    </svg>
+                ),            
+                Sun: () => (
+                    <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                    <circle cx="12" cy="12" r="5"/>
+                        <path d="M12 1v2m0 18v2M4.22 4.22l1.42 1.42m12.72 12.72 1.42 1.42M1 12h2m18 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
+                    </svg>
+                ),            
+                Wind: () => (
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 18h13M3 12h13m-3-6h10"/>
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 6a2 2 0 11-4 0 2 2 0 014 0zm4 6a2 2 0 11-4 0 2 2 0 014 0zm-2 6a2 2 0 11-4 0 2 2 0 014 0z"/>
+                    </svg>
+                ),            
+                Sparkles: () => (
+                    <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M12 0l1.545 5.455L19 7l-5.455 1.545L12 14l-1.545-5.455L5 7l5.455-1.545L12 0zm7 12l.909 3.091L23 16l-3.091.909L19 20l-.909-3.091L15 16l3.091-.909L19 12zM5 16l.909 3.091L9 20l-3.091.909L5 24l-.909-3.091L1 20l3.091-.909L5 16z"/>
+                    </svg>
+                ),            
+                Wine: () => (
+                    <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M8 2h8l1 6c0 3.31-2.69 6-6 6s-6-2.69-6-6l1-6zm3 12v6H8v2h8v-2h-3v-6h-2z"/>
+                    </svg>
+                ),            
+                Clock: () => (
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <circle cx="12" cy="12" r="10" strokeWidth={2}/>
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6l4 2"/>
+                    </svg>
+                ),            
+                BookOpen: () => (
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
+                    </svg>
+                ),            
+                Star: () => (
+                    <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+                    </svg>
+                ),            
+                Sparkle: () => (
+                    <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M12 1l2.5 7.5L22 11l-7.5 2.5L12 21l-2.5-7.5L2 11l7.5-2.5L12 1z"/>
+                    </svg>
+                ),            
+                Zap: () => (
+                    <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M13 2L3 14h8l-1 8 10-12h-8l1-8z"/>
+                    </svg>
+                ),            
+                CloudMoon: () => (
+                    <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M21 15.92A8 8 0 1 1 9.08 3a6 6 0 0 0 11.92 12.92zM6 18a4 4 0 0 0 4 4h8a5 5 0 0 0 0-10h-.1A8 8 0 0 0 6 6v12z"/>
+                    </svg>
+                ),            
+                Sunrise: () => (
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/>
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 21h18"/>
+                    </svg>
+                ),            
+                Waves: () => (
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2 8c1.5-1.5 3.5-1.5 5 0s3.5 1.5 5 0 3.5-1.5 5 0 3.5 1.5 5 0M2 14c1.5-1.5 3.5-1.5 5 0s3.5 1.5 5 0 3.5-1.5 5 0 3.5 1.5 5 0M2 20c1.5-1.5 3.5-1.5 5 0s3.5 1.5 5 0 3.5-1.5 5 0 3.5 1.5 5 0"/>
+                    </svg>
+                ),            
+                Shield: () => (
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.618 5.984A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+                    </svg>
+                ),            
+                Flame: () => (
+                    <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M12 2c-1.5 4.5-4 6-4 10a4 4 0 0 0 8 0c0-4-2.5-5.5-4-10zm0 17a3 3 0 0 1-3-3c0-1.5.5-2.5 1.5-3.5.5-.5 1-1 1.5-2 .5 1 1 1.5 1.5 2 1 1 1.5 2 1.5 3.5a3 3 0 0 1-3 3z"/>
+                    </svg>
+                ),
+            };            
+
+            const EmotionIcon = result?.emotion?.icon ? Icons[result.emotion.icon] || Icons.Sparkles : Icons.Sparkles;
+
+            return (
+                <div className="min-h-screen bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-900 p-4 md:p-8">
+                    <div className="max-w-6xl mx-auto">
+                        {/* Header */}
+                        <div className="text-center mb-8 md:mb-12">
+                            <div className="flex justify-center items-center mb-4 gap-4">
+                                <div className="animate-float">
+                                    <Icons.Sparkles />
+                                </div>
+                                <button
+                                    onClick={toggleLanguage}
+                                    className="bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-lg transition-all text-sm"
+                                >
+                                    {language === 'fa' ? 'English' : 'فارسی'}
+                                </button>
+                            </div>
+                            <h1 className="text-3xl md:text-5xl font-bold text-white mb-4 tracking-tight">
+                                {language === 'fa' ? 'ژنراتور رنگ از شعر' : 'Poetry Color Palette Generator'}
+                            </h1>
+                            <p className="text-purple-200 text-base md:text-lg">
+                                {language === 'fa' 
+                                    ? 'شعر خود را وارد کنید و پالت رنگی منحصر به فرد بگیرید'
+                                    : 'Enter your poetry and get a unique color palette'
+                                }
+                            </p>
+                        </div>
+
+                        {/* Sample Poems */}
+                        <div className="bg-white/10 backdrop-blur-lg rounded-2xl p-4 md:p-6 mb-6 md:mb-8 border border-white/20">
+                            <h3 className="text-white text-base md:text-lg font-semibold mb-4">
+                                {language === 'fa' ? 'نمونه اشعار:' : 'Sample Poems:'}
+                            </h3>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                {poets.slice(0, 6).map((p, idx) => (
+                                    <button
+                                        key={idx}
+                                        onClick={() => loadSample(p.sample, p.name)}
+                                        className="bg-white/20 hover:bg-white/30 text-white p-3 rounded-xl transition-all text-sm text-center"
+                                    >
+                                        <div className="font-bold">{p.name}</div>
+                                        <div className="text-xs text-purple-200">{p.style}</div>
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Main Card */}
+                        <div className="bg-white/10 backdrop-blur-lg rounded-3xl shadow-2xl p-4 md:p-8 mb-6 md:mb-8 border border-white/20">
+                            {/* Input Section */}
+                            <div className="mb-6">
+                                <label className="block text-white text-base md:text-lg font-semibold mb-3">
+                                    {language === 'fa' ? 'شعر خود را وارد کنید:' : 'Enter your poetry:'}
+                                </label>
+                                <textarea
+                                    value={poem}
+                                    onChange={(e) => setPoem(e.target.value)}
+                                    placeholder={language === 'fa' 
+                                        ? 'الا یا ایها الساقی ادر کاسا و ناولها\nکه عشق آسان نمود اول ولی افتاد مشکل‌ها'
+                                        : "Shall I compare thee to a summer's day?\nThou art more lovely and more temperate"
+                                    }
+                                    className="w-full h-32 md:h-40 px-4 py-3 bg-white/20 text-white placeholder-purple-200 rounded-xl border-2 border-purple-400/50 focus:border-purple-400 focus:outline-none text-base md:text-lg resize-none"
+                                    dir={language === 'fa' ? 'rtl' : 'ltr'}
+                                />
+                            </div>
+
+                            {poet && (
+                                <div className="mb-4 text-purple-200 text-sm">
+                                    {language === 'fa' ? 'شاعر: ' : 'Poet: '}{poet}
+                                </div>
+                            )}
+
+                            {/* Generate Button */}
+                            <button
+                                onClick={analyzePoetry}
+                                disabled={loading || !poem.trim()}
+                                className="w-full bg-gradient-to-r from-pink-500 via-purple-500 to-indigo-500 hover:from-pink-600 hover:via-purple-600 hover:to-indigo-600 text-white font-bold py-3 md:py-4 px-6 md:px-8 rounded-xl transition-all transform hover:scale-105 shadow-lg flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                {loading ? (
+                                    <div className="loading-spinner"></div>
+                                ) : (
+                                    <>
+                                        <Icons.Sparkles />
+                                        {language === 'fa' ? 'تولید پالت رنگی' : 'Generate Color Palette'}
+                                    </>
+                                )}
+                            </button>
+                        </div>
+
+                        {/* Results */}
+                        {result && (
+                            <>
+                                {/* Emotion Display */}
+                                <div className="bg-white/10 backdrop-blur-lg rounded-3xl shadow-2xl p-4 md:p-8 mb-6 md:mb-8 border border-white/20">
+                                    <div className="flex items-center justify-center gap-4 mb-6">
+                                        <EmotionIcon />
+                                        <h2 className="text-2xl md:text-3xl font-bold text-white">
+                                            {language === 'fa' ? 'احساس: ' : 'Emotion: '}{result.emotion.name}
+                                        </h2>
+                                    </div>
+                                    
+                                    {/* Large Gradient Display */}
+                                    <div
+                                        className="w-full h-48 md:h-64 rounded-2xl shadow-2xl mb-6"
+                                        style={{ background: result.gradient }}
+                                    />
+
+                                    {/* Color Palette */}
+                                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 md:gap-4 mb-6">
+                                        {result.colors.map((color, index) => (
+                                            <div key={index} className="group">
+                                                <div
+                                                    className="w-full h-24 md:h-32 rounded-xl shadow-lg cursor-pointer transform transition-all hover:scale-110 hover:shadow-2xl color-box"
+                                                    style={{ backgroundColor: color }}
+                                                    onClick={() => copyColor(color)}
+                                                />
+                                                <p className="text-white text-center mt-2 font-mono text-xs md:text-sm group-hover:text-yellow-300 transition-colors">
+                                                    {color}
+                                                </p>
+                                            </div>
+                                        ))}
+                                    </div>
+
+                                    {/* Action Buttons */}
+                                    <div className="flex flex-wrap gap-3 md:gap-4 justify-center">
+                                        <button
+                                            onClick={copyAllColors}
+                                            className="flex items-center gap-2 bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 md:py-3 px-4 md:px-6 rounded-xl transition-all text-sm md:text-base"
+                                        >
+                                            {language === 'fa' ? 'کپی همه رنگ‌ها' : 'Copy All Colors'}
+                                        </button>
+
+                                        <button
+                                            onClick={downloadPalette}
+                                            className="flex items-center gap-2 bg-green-500 hover:bg-green-600 text-white font-semibold py-2 md:py-3 px-4 md:px-6 rounded-xl transition-all text-sm md:text-base"
+                                        >
+                                            {language === 'fa' ? 'دانلود پالت' : 'Download Palette'}
+                                        </button>
+
+                                        <button
+                                            onClick={savePalette}
+                                            className="flex items-center gap-2 bg-purple-500 hover:bg-purple-600 text-white font-semibold py-2 md:py-3 px-4 md:px-6 rounded-xl transition-all text-sm md:text-base"
+                                        >
+                                            {language === 'fa' ? 'ذخیره پالت' : 'Save Palette'}
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {/* CSS Code Export */}
+                                <div className="bg-white/10 backdrop-blur-lg rounded-3xl shadow-2xl p-4 md:p-8 mb-6 md:mb-8 border border-white/20">
+                                    <h3 className="text-xl md:text-2xl font-bold text-white mb-4">
+                                        {language === 'fa' ? 'کد CSS' : 'CSS Code'}
+                                    </h3>
+                                    <div className="bg-slate-900 rounded-xl p-3 md:p-4 overflow-x-auto">
+                                        <code className="text-green-400 text-xs md:text-sm font-mono">
+                                            {result.cssCode.fullCSS}
+                                        </code>
+                                    </div>
+                                    <button
+                                        onClick={() => {
+                                            navigator.clipboard.writeText(result.cssCode.fullCSS);
+                                            showToast(language === 'fa' ? 'کد کپی شد' : 'Code copied!');
+                                        }}
+                                        className="mt-4 bg-slate-700 hover:bg-slate-600 text-white py-2 px-4 rounded-lg transition-all text-sm md:text-base"
+                                    >
+                                        {language === 'fa' ? 'کپی کد CSS' : 'Copy CSS Code'}
+                                    </button>
+                                </div>
+                            </>
+                        )}
+
+                        {/* Info Section */}
+                        <div className="bg-white/10 backdrop-blur-lg rounded-3xl shadow-2xl p-4 md:p-8 mb-6 md:mb-8 border border-white/20">
+                            <h3 className="text-2xl font-bold text-white mb-4">{language === 'fa' ? 'چگونه کار می‌کند؟' : 'How it works?'}</h3>
+                            <div className="text-purple-100 space-y-3">
+                                <p>🎨 <strong>{language === 'fa' ? 'تحلیل احساسی' : 'Emotional Analysis'}:</strong> {language === 'fa' ? 'الگوریتم ما کلمات کلیدی شعر را تحلیل می‌کند و احساس غالب را شناسایی می‌کند' : 'Our algorithm analyzes the keywords of the poem and identifies the dominant emotion'}.</p>
+                                <p>🌈 <strong>{language === 'fa' ? 'تولید رنگ' : 'Color Generation'}:</strong> {language === 'fa' ? 'براساس احساس شناسایی شده، پالت رنگی هماهنگ تولید می‌شود' : 'Based on the identified emotion, a harmonious color palette is generated'}.</p>
+                                <p>💎 <strong>{language === 'fa' ? 'احساسات پشتیبانی شده' : 'Supported Emotions'}:</strong> {language === 'fa' ? 'عشق، غم، شادی، طبیعت، معنویت، می و باده، ...' : 'Love, Sadness, Joy, Nature, Spirituality, Passion, ...'}.</p>
+                                <p>✨ <strong>{language === 'fa' ? 'منحصر به فرد' : 'Unique'}:</strong> {language === 'fa' ? 'هر شعر پالت رنگی یکتای خود را دارد' : 'Each poem has its own unique color palette that aligns with its emotions'}.</p>
+                            </div>
+                        </div>
+
+                        {/* Saved Palettes */}
+                        {savedPalettes.length > 0 && (
+                            <div className="bg-white/10 backdrop-blur-lg rounded-3xl shadow-2xl p-4 md:p-8 mb-6 md:mb-8 border border-white/20">
+                                <h2 className="text-xl md:text-2xl font-bold text-white mb-6">
+                                    {language === 'fa' ? 'پالت‌های ذخیره شده' : 'Saved Palettes'}
+                                </h2>
+                                <div className="space-y-4">
+                                    {savedPalettes.map((palette, index) => (
+                                        <div
+                                            key={index}
+                                            className="bg-white/10 rounded-xl p-3 md:p-4 border border-purple-400/30 hover:bg-white/20 transition-all cursor-pointer"
+                                            onClick={() => {
+                                                setResult({
+                                                    ...result,
+                                                    colors: palette.colors,
+                                                    gradient: palette.gradient
+                                                });
+                                            }}
+                                        >
+                                            <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+                                                <p className="text-purple-200 text-xs md:text-sm">{palette.poem}</p>
+                                                <span className="text-xs text-purple-300">{palette.timestamp}</span>
+                                            </div>
+                                            <div className="flex items-center gap-2 mb-2">
+                                                <span className="text-yellow-300 text-xs md:text-sm">{palette.emotion}</span>
+                                                {palette.poet && <span className="text-purple-300 text-xs">• {palette.poet}</span>}
+                                            </div>
+                                            <div className="flex gap-2 flex-wrap">
+                                                {palette.colors.map((color, idx) => (
+                                                    <div
+                                                        key={idx}
+                                                        className="w-10 h-10 md:w-12 md:h-12 rounded-lg"
+                                                        style={{ backgroundColor: color }}
+                                                    />
+                                                ))}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        };
+
+        ReactDOM.render(<App />, document.getElementById('root'));
+    </script>
+</body>
+</html>
