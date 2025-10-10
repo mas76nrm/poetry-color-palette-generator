@@ -445,7 +445,7 @@ We welcome contributions! Please follow these steps:
 
 ## 📝 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License.
 
 ## 🙏 Acknowledgments
 
@@ -472,8 +472,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - **Famous Poets**: 14+ across cultures
 - **Color Variations**: Unlimited combinations
 - **API Response Time**: < 100ms average
-
-##
 
 # 🎨 Frontend Documentation
 
